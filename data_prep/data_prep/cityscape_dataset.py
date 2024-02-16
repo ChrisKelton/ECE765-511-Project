@@ -122,12 +122,17 @@ def get_dataset(
 
 
 def main_cli():
-    data_path = Path("data")
-    gtFine_trainvaltest_path = data_path / "gtFine_trainvaltest.zip"
-    leftImg8bit_trainvaltest_path = data_path / "leftImg8bit_trainvaltest.zip"
-    _ = get_dataset(gtFine_trainvaltest_path, leftImg8bit_trainvaltest_path)
+    stamp_file = Path("data/data.stamp")
+    if stamp_file.exists():
+        with open(str(stamp_file), 'r') as f:
+            lines = [l.strip("\n") for l in f.readlines()]
+        if len(lines) > 0:
+            if lines[0] in ["Successfully unzipped the data"]:
+                print(f"'{stamp_file}' indicates data has already been successfully unzipped. Exiting...")
+                exit(0)
 
-    stamp_file = data_path / "data.stamp"
+    _ = get_dataset()
+
     with open(str(stamp_file), 'w') as f:
         f.write("Successfully unzipped the data")
 
