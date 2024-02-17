@@ -74,7 +74,6 @@ DataPath = Path("data")
 gtFine_trainvaltest_zip_path = DataPath / "gtFine_trainvaltest.zip"
 gtFine_trainvaltest_path = DataPath / "gtFine_trainvaltest"
 leftImg8bit_trainvaltest_zip_path = DataPath / "leftImg8bit_trainvaltest.zip"
-DatasetStampFilePath = Path("data/data.stamp")
 
 
 DefaultUnzippedDatasets: UnzippedDatasets = UnzippedDatasets(gtFine_trainvaltest_path)
