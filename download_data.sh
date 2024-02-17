@@ -46,12 +46,14 @@ else
   success="$(cat $stamp_file | grep "Successfully unzipped the data" | wc -l)"
   if [ $success -lt 1 ]; then
     unzip_files=true
+  else
+    echo "Stamp file exists, so data has already been unzipped."
   fi
 fi
 #
 if $unzip_files; then
   echo "Unzipping CityScapes DataSet..."
-  python $current_dir/data_prep/cityscape_dataset.py
+  python $current_dir/data_prep/unzip_cityscape_dataset.py
 fi
 #
 echo "Finished"
