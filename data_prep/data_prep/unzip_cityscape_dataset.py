@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 from utils.zip import unzip_file
+from utils import SystemPath
 
 
 @dataclass
@@ -70,7 +71,7 @@ class UnzippedDatasets:
             self.check_Img8bit_file_structure("test")
 
 
-DataPath = Path("data")
+DataPath = SystemPath / "data"
 gtFine_trainvaltest_zip_path = DataPath / "gtFine_trainvaltest.zip"
 gtFine_trainvaltest_path = DataPath / "gtFine_trainvaltest"
 leftImg8bit_trainvaltest_zip_path = DataPath / "leftImg8bit_trainvaltest.zip"
