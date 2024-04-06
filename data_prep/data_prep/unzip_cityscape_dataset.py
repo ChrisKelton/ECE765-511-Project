@@ -17,6 +17,10 @@ class UnzippedDatasets:
         self.gt_root = gt_root
 
     @property
+    def label_root(self) -> Path:
+        return self.gt_root / "gtFine"
+
+    @property
     def img_root(self) -> Path:
         return self.gt_root / "leftImg8bit"
 

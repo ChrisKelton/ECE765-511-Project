@@ -140,7 +140,7 @@ def class_percentages(
         base_out_path = DataPath
 
     # get CityScape datasets
-    datasets: LoadedDatasets = get_dataset(gt_root, split=split, ignore_non_eval_classes=ignore_non_eval_classes)
+    datasets: LoadedDatasets = get_dataset(gt_root, split=split)
 
     if split is None:
         split = ["train", "val", "test"]
@@ -177,6 +177,7 @@ def class_percentages(
         # get split type dataset
         dataset: Cityscapes = getattr(datasets, dataset_type)
 
+        # TODO: use RemappedLabelsDict as opposed to classes specified by dataset.classes
         # organize class labels by some unique identifier, in this case id
         # returns a dict where each key is the instance id and the resulting CityscapesClass data structure containing
         # information about each class
