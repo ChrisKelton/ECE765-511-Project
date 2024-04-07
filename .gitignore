@@ -2,3 +2,4 @@
 data/
 # ignore all files in third-party
 third-party/
+semantic_segmentation/train/checkpoints/

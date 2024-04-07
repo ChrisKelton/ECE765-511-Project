@@ -9,4 +9,4 @@ pip install -e $current_dir/utils
 pip install -e $current_dir/data_prep
 pip install -e $current_dir/data_analysis
 pip install -e $current_dir/visualization
-pip install -e $current_dir/crf
+pip install -e $current_dir/semantic_segmentation

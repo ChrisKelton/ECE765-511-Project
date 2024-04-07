@@ -50,10 +50,14 @@ else
     echo "Stamp file exists, so data has already been unzipped."
   fi
 fi
+# run install-packages.sh to install necessary packages to run utilities in code for unzipping and reformatting dataset
+bash $current_dir/install-packages.sh
 #
 if $unzip_files; then
   echo "Unzipping CityScapes DataSet..."
-  python $current_dir/data_prep/unzip_cityscape_dataset.py
+  python $current_dir/data_prep/data_prep/unzip_cityscape_dataset.py
 fi
+# remap labels to ignore non_eval classes and enumerate remaining labels
+python $current_dir/data_prep/data_prep/reformat_labels_for_non_eval_classes.py
 #
 echo "Finished"
