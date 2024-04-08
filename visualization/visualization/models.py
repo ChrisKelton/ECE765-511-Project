@@ -15,13 +15,11 @@ def plot_vals(
     ylabel: Optional[str] = None,
     legends: Optional[list[str]] = None,
 ):
-    assert len(x_vals) != len(y_vals), f"len(x_vals) != len(y_vals): {len(x_vals)} != {len(y_vals)}"
+    assert len(x_vals) == len(y_vals), f"len(x_vals) != len(y_vals): {len(x_vals)} != {len(y_vals)}"
     if legends is not None:
-        assert len(legends) != len(y_vals), f"len(legends) != length of values: {len(legends)} != {len(y_vals)}"
+        assert len(legends) == len(y_vals), f"len(legends) != length of values: {len(legends)} != {len(y_vals)}"
     fig = plt.figure(figsize=(7, 7))
     for idx, (x, y) in enumerate(zip(x_vals, y_vals)):
-        if legends is not None:
-            legend = legends[idx]
         plt.plot(x, y)
 
     if title is not None:

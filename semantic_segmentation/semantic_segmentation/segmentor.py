@@ -2,9 +2,9 @@ __all__ = ["Segmentor"]
 import torch
 import torch.nn as nn
 
-from .backbone import FcnResNet50BackBone
-from .crf import CrfRnn, CrfRnnConfig
-from utils.torch_model import print_number_of_params
+from semantic_segmentation.backbone import FcnResNet50BackBone
+from semantic_segmentation.crf import CrfRnn, CrfRnnConfig
+from utils.torch_model import get_n_params
 
 
 class Segmentor(nn.Module):
@@ -31,6 +31,14 @@ class Segmentor(nn.Module):
             bilateral_filter_sigmas=bilateral_filter_sigmas,
         )
 
+    def print_n_params(self):
+        total_params = get_n_params(self)
+        backbone_params = get_n_params(self.backbone)
+        crf_net_params = get_n_params(self.crf_net)
+        print(f"Total Number of Parameters: {total_params / 1000}K\n"
+              f"\tBackbone Parameters: {backbone_params / 1000}K\n"
+              f"\tCRF-RNN Parameters: {crf_net_params / 1000}K")
+
     def forward(self, x) -> torch.Tensor:
         x_unary_potentials = self.backbone(x)
         x_crf = self.crf_net(x, x_unary_potentials)
@@ -47,7 +55,7 @@ def main():
     labels = labels.to(device)
 
     segmentor = Segmentor(n_classes=20).to(device)
-    print_number_of_params(segmentor)
+    segmentor.print_n_params()
     out = segmentor(imgs)
     print(imgs.shape, out.shape)
 
