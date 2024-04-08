@@ -27,6 +27,9 @@ class CustomFilterLayer(nn.Module):
             nn.Conv2d(channels, channels, kernel_size, stride=1, padding=0, bias=False, groups=channels),
         )
 
+        # not trying to learn these Filters, they are already getting defined weights from scipy or cv2
+        self.requires_grad_(requires_grad=False)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.layers(x)
 

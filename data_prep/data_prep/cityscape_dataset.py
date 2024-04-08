@@ -148,6 +148,7 @@ def get_dataset(
     *,
     ignore_non_eval_classes: bool = False,
     return_cityscape_objects: bool = False,
+    center_crop_size: Optional[tuple[int, int]] = (648, 648)
 ) -> LoadedDatasets:
     """
 
@@ -182,6 +183,8 @@ def get_dataset(
                 - license plate
         return_cityscape_objects: boolean to apply no target_transform, only used when initially remapping
             ignore_non_eval_classes to other values in the labels
+        center_crop_size: size to crop images to, (int, int). Necessary due to our very large images & not
+            enough computing resources. Is NOT applied when 'return_cityscape_objects' is 'True'
 
     Returns:
 
@@ -222,12 +225,21 @@ def get_dataset(
         else:
             # use PILToTensor to maintain uint8 dtype
             target_transform.append(torchvision.transforms.PILToTensor())
+        if center_crop_size is not None:
+            target_transform.append(torchvision.transforms.CenterCrop(size=center_crop_size))
         target_transform = torchvision.transforms.Compose(target_transform)
 
     if transform is None:
         transform: list[Callable] = [torchvision.transforms.ToTensor()]
     transform.append(torchvision.transforms.Normalize(DATA_MEANS, DATA_STD))
+    if center_crop_size is not None and not return_cityscape_objects:
+        transform.append(torchvision.transforms.CenterCrop(size=center_crop_size))
     transform = torchvision.transforms.Compose(transform)
+
+    # if center_crop_size is not None:
+    #     transforms = torchvision.transforms.Compose([
+    #         torchvision.transforms.CenterCrop(size=center_crop_size),
+    #     ])
 
     if pin_memory is None:
         pin_memory = True if torch.cuda.is_available() else False
