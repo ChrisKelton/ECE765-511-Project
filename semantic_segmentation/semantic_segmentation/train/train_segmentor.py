@@ -1,9 +1,10 @@
 from pathlib import Path
+from typing import Optional
 
+import jsonpickle
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -35,10 +36,9 @@ def test_model(model: nn.Module, dataloader: DataLoader, criterion: nn.Module) -
         label = label.to(device)
         out = model(img)
 
-        loss: torch.Tensor = criterion(out, label)
+        loss: torch.Tensor = criterion(out, label.reshape(label.size(0), label.size(2), label.size(3)).long())
         loss_vals.append(float(loss.detach()))
-        pred = F.softmax(out, dim=1)
-        acc_vals.append(accuracy_score(label.detach().cpu().numpy(), pred.detach().cpu().numpy()))
+        acc_vals.append(float(accuracy_score(label.detach(), torch.argmax(out, dim=1).detach())))
 
     return {"loss": np.mean(loss_vals), "acc": np.mean(acc_vals)}
 
@@ -79,11 +79,12 @@ def train(
     val_loader: DataLoader,
     criterion: nn.Module,
     optimizer: nn.Module,
-    base_out_path: Path = CheckpointPath,
+    base_out_path: Optional[Path] = None,
     epochs: int = 10,
     epochs_to_test_val: int = 5,
 ) -> tuple[nn.Module, dict[str, float], dict[str, float]]:
-
+    if base_out_path is None:
+        base_out_path = CheckpointPath
     base_out_path.mkdir(exist_ok=True, parents=True)
 
     model.train()
@@ -150,30 +151,44 @@ def train(
         legends=["train", "validation"],
     )
 
+    optimizer_out_path = base_out_path / "Adam-optimizer.json"
+    optimizer_out_path.write_text(jsonpickle.dumps({"optimizer": optimizer}))
+
     print(f"Returning best model at '{model_out_path}'")
     return model.load_state_dict(torch.load(str(model_out_path))), best_train_result, best_val_result
 
 
-def main():
+def main(
+    data_path: Optional[Path] = None,
+    n_workers: int = 2,
+    batch_size: int = 4,
+    learning_rate: float = 1e-3,
+    epochs: int = 10,
+    epochs_to_test_val: int = 2,
+    output_path: Optional[Path] = None,
+    center_crop_size: Optional[tuple[int, int]] = (648, 648),
+):
     segmentor = Segmentor(n_classes=20).to(device)
     print_number_of_params(segmentor)
-    batch_size = 2
-    datasets: LoadedDatasets = get_dataset(batch_size=batch_size)
+    datasets: LoadedDatasets = get_dataset(
+        gt_root=data_path,
+        num_workers=n_workers,
+        batch_size=batch_size,
+        center_crop_size=center_crop_size,
+    )
     criterion = nn.CrossEntropyLoss()
-    learning_rate: float = 1e-3
     optimizer = Adam(segmentor.parameters(), lr=learning_rate)
-    epochs = 10
-    epochs_to_test_val = 5
     trained_segmentor, best_train_result, best_val_result = train(
         model=segmentor,
         train_loader=datasets.train,
         val_loader=datasets.val,
         criterion=criterion,
         optimizer=optimizer,
+        base_out_path=output_path,
         epochs=epochs,
         epochs_to_test_val=epochs_to_test_val,
     )
-    test_results = test_model(trained_segmentor, datasets.test, criterion)
+    test_results = test_model(segmentor, datasets.test, criterion)
     print(f"Best Model Results:\n"
           f"\tTrain Results: loss: {best_train_result['loss']:.3f}, acc: {(best_train_result['acc'] * 100):.3f}%\n"
           f"\tValidation Results: loss: {best_val_result['loss']:.3f}, acc: {(best_val_result['acc'] * 100):.3f}%\n"
