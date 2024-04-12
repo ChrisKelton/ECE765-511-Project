@@ -169,7 +169,7 @@ def main(
     center_crop_size: Optional[tuple[int, int]] = (648, 648),
 ):
     segmentor = Segmentor(n_classes=20).to(device)
-    print_number_of_params(segmentor)
+    segmentor.print_n_params()
     datasets: LoadedDatasets = get_dataset(
         gt_root=data_path,
         num_workers=n_workers,
