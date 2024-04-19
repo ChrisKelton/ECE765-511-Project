@@ -2,6 +2,7 @@ __all__ = [
     "LoadedDatasets",
     "get_dataset",
     "IgnoreEvalClasses",
+    "RemappedLabels",
     "RemappedLabelsDict",
     "targets_transform_ignore_non_eval",
 ]
@@ -96,6 +97,38 @@ class RemappedLabels(Enum):
     motorcycle = 18
     bicycle = 19
 
+    @classmethod
+    def to_dict(cls, inv: bool = False) -> Union[dict[str, int], dict[int, str]]:
+        dict_ = {
+            cls.unlabeled.name: cls.unlabeled.value,
+            cls.road.name: cls.road.value,
+            cls.sidewalk.name: cls.sidewalk.value,
+            cls.building.name: cls.building.value,
+            cls.wall.name: cls.wall.value,
+            cls.fence.name: cls.fence.value,
+            cls.pole.name: cls.pole.value,
+            cls.traffic_light.name: cls.traffic_light.value,
+            cls.traffic_sign.name: cls.traffic_sign.value,
+            cls.vegetation.name: cls.vegetation.value,
+            cls.terrain.name: cls.terrain.value,
+            cls.sky.name: cls.sky.value,
+            cls.person.name: cls.person.value,
+            cls.rider.name: cls.rider.value,
+            cls.car.name: cls.car.value,
+            cls.truck.name: cls.truck.value,
+            cls.bus.name: cls.bus.value,
+            cls.train.name: cls.train.value,
+            cls.motorcycle.name: cls.motorcycle.value,
+            cls.bicycle.name: cls.bicycle.value,
+        }
+        if not inv:
+            return dict_
+
+        inv_dict: dict[int, str] = {}
+        for key, val in dict_.items():
+            inv_dict[val] = key
+        return inv_dict
+
 
 RemappedLabelsDict: dict[int, int] = {
     7: RemappedLabels.road.value,
@@ -148,7 +181,8 @@ def get_dataset(
     *,
     ignore_non_eval_classes: bool = False,
     return_cityscape_objects: bool = False,
-    center_crop_size: Optional[tuple[int, int]] = (648, 648)
+    center_crop_size: Optional[tuple[int, int]] = None,  # (648, 648)
+    resize_size: Optional[tuple[int, int]] = (224, 224),
 ) -> LoadedDatasets:
     """
 
@@ -185,6 +219,7 @@ def get_dataset(
             ignore_non_eval_classes to other values in the labels
         center_crop_size: size to crop images to, (int, int). Necessary due to our very large images & not
             enough computing resources. Is NOT applied when 'return_cityscape_objects' is 'True'
+        resize_size: size to resize images to (int, int). Necessary due to very large images.
 
     Returns:
 
@@ -227,13 +262,18 @@ def get_dataset(
             target_transform.append(torchvision.transforms.PILToTensor())
         if center_crop_size is not None:
             target_transform.append(torchvision.transforms.CenterCrop(size=center_crop_size))
+        if resize_size is not None:
+            target_transform.append(torchvision.transforms.Resize(size=resize_size, antialias=True))
         target_transform = torchvision.transforms.Compose(target_transform)
 
     if transform is None:
         transform: list[Callable] = [torchvision.transforms.ToTensor()]
-    transform.append(torchvision.transforms.Normalize(DATA_MEANS, DATA_STD))
+    # transform.append(torchvision.transforms.Normalize(DATA_MEANS, DATA_STD))
     if center_crop_size is not None and not return_cityscape_objects:
         transform.append(torchvision.transforms.CenterCrop(size=center_crop_size))
+    if resize_size is not None and not return_cityscape_objects:
+        transform.append(torchvision.transforms.Resize(size=resize_size, antialias=True))
+    transform.append(torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
     transform = torchvision.transforms.Compose(transform)
 
     # if center_crop_size is not None:

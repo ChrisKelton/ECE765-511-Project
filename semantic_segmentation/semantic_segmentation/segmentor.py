@@ -17,10 +17,11 @@ class Segmentor(nn.Module):
         gaussian_filter_sigmas: tuple[tuple[int, ...], ...] = CrfRnnConfig["gaussian_filter_sigmas"],
         bilateral_filter_kernel_sizes: tuple[tuple[int, ...], ...] = CrfRnnConfig["bilateral_filter_kernel_sizes"],
         bilateral_filter_sigmas: tuple[tuple[tuple[int, float], ...], ...] = CrfRnnConfig["bilateral_filter_sigmas"],
+        freeze_backbone_layers: bool = True,
     ):
         super().__init__()
 
-        self.backbone = FcnResNet50BackBone()
+        self.backbone = FcnResNet50BackBone(n_layers_to_not_freeze=0 if freeze_backbone_layers else -1)
         self.crf_net = CrfRnn(
             n_classes=n_classes,
             n_crf_blocks=n_crf_blocks,
