@@ -4,32 +4,41 @@ import time
 import torch
 import torch.nn as nn
 from torchvision.models.segmentation import fcn_resnet50, FCN_ResNet50_Weights
+from utils.torch_model import freeze_layers
 
 from data_prep.cityscape_dataset import get_dataset, LoadedDatasets
 
 
 class FcnResNet50Wrapper(nn.Module):
-    def __init__(self, weights: FCN_ResNet50_Weights = FCN_ResNet50_Weights.DEFAULT):
+    def __init__(self, weights: FCN_ResNet50_Weights = FCN_ResNet50_Weights.DEFAULT, n_layers_to_not_freeze: int = 0):
         super().__init__()
 
         self.resnet50 = fcn_resnet50(weights=weights)
+        if n_layers_to_not_freeze >= 0:
+            freeze_layers(self.resnet50.backbone, n_layers_to_not_freeze)
 
     def forward(self, x) -> torch.Tensor:
         return self.resnet50(x)["out"]
 
 
 class FcnResNet50BackBone(FcnResNet50Wrapper):
-    def __init__(self, n_classes: int = 20, weights: FCN_ResNet50_Weights = FCN_ResNet50_Weights.DEFAULT):
-        super().__init__(weights)
+    def __init__(
+        self,
+        n_classes: int = 20,
+        weights: FCN_ResNet50_Weights = FCN_ResNet50_Weights.DEFAULT,
+        n_layers_to_not_freeze: int = 0,
+    ):
+        super().__init__(weights=weights, n_layers_to_not_freeze=n_layers_to_not_freeze)
 
         for children in self.resnet50.children():
             for child in children.children():
                 pass
         in_channels = child.out_channels
+        self.relu = nn.ReLU()
         self.proj_to_class_space = nn.Conv2d(in_channels, n_classes, kernel_size=(1, 1), stride=(1, 1))
 
     def forward(self, x) -> torch.Tensor:
-        return self.proj_to_class_space(super().forward(x))
+        return self.proj_to_class_space(self.relu(super().forward(x)))
 
 
 def main():

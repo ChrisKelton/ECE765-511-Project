@@ -8,6 +8,8 @@ import scipy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import time
+import datetime
 
 from utils.torch_model import print_number_of_params
 
@@ -114,12 +116,17 @@ class ConditionalRandomFieldBlock(nn.Module):
         self.message_passing_channels_size = channels * (len(self.gaussian_filters) + len(self.bilateral_filters))
 
         # ******************** Weighting Filter Outputs ********************
-        self.conv_weight_filter_outputs = nn.Conv2d(
+        # self.conv_weight_filter_outputs = nn.Conv2d(
+        #     self.message_passing_channels_size,
+        #     1,
+        #     kernel_size=1,
+        # )
+        self.conv_weight_filter_outputs = nn.Conv3d(
             self.message_passing_channels_size,
             1,
             kernel_size=1,
         )
-        self.leaky_relu = nn.LeakyReLU()
+        self.relu = nn.ReLU()
 
         # ******************** Compatibility Transform ********************
         self.conv_compatibility = nn.Conv2d(
@@ -182,17 +189,12 @@ class ConditionalRandomFieldBlock(nn.Module):
         # Q_weighted shape: [Batch size, Num Classes, Height, Width]
         # E.g., if we have 2 Gaussian filters & 2 Bilateral filters, then n_filters = 4
         x_message_passed = self.message_passing(x)
-        Q_weighted: list[torch.Tensor] = []
-        for idx in range(Q_init.size(1)):
-            # iterate over message passing and weighted filter outputs portions of algorithm
-            # want to look at each message passed per label's unary potential
 
-            # Q_i^(m)(l) <- Sum_{j != i}k^(m)(f_i, f_j)Q_j(l) for all m
-            Q_message_passed_per_layer = x_message_passed * Q_init[:, idx][:, None, :, :]
-
-            # Q_i(l) <- Sum_{m}w^(m)Q_i^(m)(l)
-            Q_weighted.append(self.leaky_relu(self.conv_weight_filter_outputs(Q_message_passed_per_layer)))
-        Q_weighted = torch.cat(Q_weighted, dim=1)
+        # iterate over message passing and weighted filter outputs portions of algorithm
+        # want to look at each message passed per label's unary potential
+        Q_message_passed_per_layer = x_message_passed[:, :, None, :, :] * Q_init[:, None, :, :, :]
+        Q_weighted_filter = self.conv_weight_filter_outputs(Q_message_passed_per_layer).reshape(Q_init.shape)
+        Q_weighted = self.relu(Q_weighted_filter)
 
         # Outputs from Q_weighted are shared between the labels to a varied extent, depending on the compatibility
         # between these labels. Compatibility between the two labels l & l' is parameterized by the label compatibility
@@ -210,6 +212,71 @@ class ConditionalRandomFieldBlock(nn.Module):
         Q_w_unary_pot = unary_potentials - Q_compatibility
 
         return Q_w_unary_pot
+
+
+class ConditionalRandomFieldBlockTimed(ConditionalRandomFieldBlock):
+
+    @classmethod
+    def timer(cls, beg_time, end_time, name):
+        time_delta = datetime.timedelta(microseconds=int(round(end_time - beg_time)))
+        print(f"{name}: {time_delta}us")
+
+    def forward(self, x: torch.Tensor, unary_potentials: torch.Tensor) -> torch.Tensor:
+        """
+
+        Args:
+            x: input images, shape: [Batch size, Channels, Height, Width]
+            unary_potentials: comes from the output of the backbone FCN, shape: [Batch size, Num Classes, Height, Width]
+
+        Returns:
+
+        """
+        # Q_init shape: [Batch size, Num Classes, Height, Width]
+        # H_1
+        time_beg = time.perf_counter_ns()
+        Q_init = self.initialize_simpler_distribution(unary_potentials)
+        time_end = time.perf_counter_ns()
+        self.timer(beg_time=time_beg * 1000, end_time=time_end * 1000, name="initialize_simpler_distribution")
+
+        # Q_weighted shape: [Batch size, Num Classes, Height, Width]
+        # E.g., if we have 2 Gaussian filters & 2 Bilateral filters, then n_filters = 4
+        time_beg = time.perf_counter_ns()
+        x_message_passed = self.message_passing(x)
+        time_end = time.perf_counter_ns()
+        self.timer(beg_time=time_beg * 1000, end_time=time_end * 1000, name="message_passing")
+
+        # iterate over message passing and weighted filter outputs portions of algorithm
+        # want to look at each message passed per label's unary potential
+        time_beg = time.perf_counter_ns()
+        Q_message_passed_per_layer = x_message_passed[:, :, None, :, :] * Q_init[:, None, :, :, :]
+        Q_weighted_filter = self.conv_weight_filter_outputs(Q_message_passed_per_layer).reshape(Q_init.shape)
+        Q_weighted = self.relu(Q_weighted_filter)
+        time_end = time.perf_counter_ns()
+        self.timer(beg_time=time_beg * 1000, end_time=time_end * 1000, name="weighted message passing")
+
+        # Outputs from Q_weighted are shared between the labels to a varied extent, depending on the compatibility
+        # between these labels. Compatibility between the two labels l & l' is parameterized by the label compatibility
+        # function u(l, l'). The Potts model, given by u(l, l') = [l != l'], where [.] is the Iverson bracket, assigns
+        # a fixed penalty if different labels are assigned to pixels with similar properties. A limitation of this
+        # model is that it assigns the same penalty for all different pairs of labels. Therefore, the paper concluded
+        # to allow this compatibility function to be learned by a 1 x 1 convolutional layer where the number of inputs
+        # and outputs is both the Num Classes.
+        time_beg = time.perf_counter_ns()
+        Q_compatibility = self.conv_compatibility(Q_weighted)
+        time_end = time.perf_counter_ns()
+        self.timer(beg_time=time_beg * 1000, end_time=time_end * 1000, name="compatibility")
+
+        # Iterative portion where we refine the unary_potentials and return them. This is simply a block in the
+        # overall model architecture of the CRF-RNN model, so the output here will be the unary_potentials input in the
+        # next iteration.
+        # H_2
+        time_beg = time.perf_counter_ns()
+        Q_w_unary_pot = unary_potentials - Q_compatibility
+        time_end = time.perf_counter_ns()
+        self.timer(beg_time=time_beg * 1000, end_time=time_end * 1000, name="refine potentials")
+
+        return Q_w_unary_pot
+
 
 
 CrfRnnConfig: dict[str, Any] = {
@@ -269,6 +336,61 @@ class CrfRnn(nn.Module):
         return F.softmax(unary_potentials, dim=1)
 
 
+class CrfRnnTimed(nn.Module):
+    def __init__(
+        self,
+        n_classes: int,
+        n_crf_blocks: int = 5,  # it is not advised to increase this value
+        channels: int = 3,
+        gaussian_filter_kernel_sizes: tuple[tuple[int, ...], ...] = CrfRnnConfig["gaussian_filter_kernel_sizes"],
+        gaussian_filter_sigmas: tuple[tuple[int, ...], ...] = CrfRnnConfig["gaussian_filter_sigmas"],
+        bilateral_filter_kernel_sizes: tuple[tuple[int, ...], ...] = CrfRnnConfig["bilateral_filter_kernel_sizes"],
+        bilateral_filter_sigmas: tuple[tuple[tuple[int, float], ...], ...] = CrfRnnConfig["bilateral_filter_sigmas"],
+        return_logits: bool = True,
+    ):
+        super().__init__()
+        self.n_classes = n_classes,
+        self.n_crf_blocks = n_crf_blocks
+        self.channels = channels
+        self.gaussian_filter_kernel_sizes = gaussian_filter_kernel_sizes
+        self.gaussian_filter_sigmas = gaussian_filter_sigmas
+        self.bilateral_filter_kernel_sizes = bilateral_filter_kernel_sizes
+        self.bilateral_filter_sigmas = bilateral_filter_sigmas
+        self.return_logits = return_logits
+
+        assert len(self.gaussian_filter_kernel_sizes) == n_crf_blocks, f"Incorrect number of 'gaussian_filter_kernel_sizes' for '{n_crf_blocks}' CRF Blocks"
+        assert len(self.gaussian_filter_sigmas) == n_crf_blocks, f"Incorrect number of 'gaussian_filter_sigmas' for '{n_crf_blocks}' CRF Blocks"
+        assert len(self.bilateral_filter_kernel_sizes) == n_crf_blocks, f"Incorrect number of 'bilateral_filter_kernel_sizes' for '{n_crf_blocks}' CRF Blocks"
+        assert len(self.bilateral_filter_sigmas) == n_crf_blocks, f"Incorrect number of 'bilateral_filter_sigmas' for '{n_crf_blocks}' CRF Blocks"
+
+        self.crf_blocks: nn.ModuleList[ConditionalRandomFieldBlockTimed] = nn.ModuleList()
+        for block_idx in range(self.n_crf_blocks):
+            self.crf_blocks.append(
+                ConditionalRandomFieldBlockTimed(
+                    n_classes=n_classes,
+                    channels=channels,
+                    gaussian_filter_kernel_sizes=self.gaussian_filter_kernel_sizes[block_idx],
+                    gaussian_filter_sigmas=self.gaussian_filter_sigmas[block_idx],
+                    bilateral_filter_kernel_sizes=self.bilateral_filter_kernel_sizes[block_idx],
+                    bilateral_filter_sigmas=self.bilateral_filter_sigmas[block_idx],
+                )
+            )
+
+    def forward(self, x: torch.Tensor, unary_potentials: torch.Tensor) -> torch.Tensor:
+        time_beg_ = time.perf_counter_ns()
+        for idx, crf_block in enumerate(self.crf_blocks):
+            time_beg = time.perf_counter_ns()
+            unary_potentials = crf_block(x, unary_potentials)
+            time_end = time.perf_counter_ns()
+            ConditionalRandomFieldBlockTimed.timer(beg_time=time_beg * 1000, end_time=time_end * 1000, name=f"crf-block {idx}")
+        time_end_ = time.perf_counter_ns()
+        ConditionalRandomFieldBlockTimed.timer(beg_time=time_beg_ * 1000, end_time=time_end_ * 1000, name="All crf-blocks")
+
+        if self.return_logits:
+            return unary_potentials
+        return F.softmax(unary_potentials, dim=1)
+
+
 def main():
     from backbone import FcnResNet50BackBone
     from data_prep.cityscape_dataset import get_dataset
@@ -280,7 +402,7 @@ def main():
     labels = labels.to(device)
     unary_potentials = fcn_resnet50(imgs)
 
-    crf_net = CrfRnn(n_classes=20).to(device)
+    crf_net = CrfRnnTimed(n_classes=20).to(device)
     print_number_of_params(crf_net)
     out = crf_net(imgs, unary_potentials)
     print(imgs.shape, out.shape)
