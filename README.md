@@ -5,6 +5,7 @@ Based off of research paper: https://www.robots.ox.ac.uk/~szheng/papers/CRFasRNN
 
 
 Setup Steps:
+	
 	1) Create a conda environment and utilize the requirements.txt for necessary packages.
 	
 	2) From the command line run the install-packages.sh script by:
