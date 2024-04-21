@@ -54,4 +54,3 @@ Results:
 | FcnResNet (frozen backbone layers)                                   |      87.54%       |       86.33%        |     0.394     |      0.442      |   30   |
 | CRF-RNN w/ FcnResNet Backbone (frozen backbone layers)               |      87.63%       |       86.54%        |     0.387     |      0.432      |   30   |
 | CRF-RNN w/ FineTuned FcnResNet Backbone (frozen backbone layers)     |      89.12%       |       87.01%        |     0.336     |      0.422      |   30   |
-| CRF-RNN w/ FineTuned FcnResNet Backbone (non frozen backbone layers) |                   |                     |               |                 |        |
