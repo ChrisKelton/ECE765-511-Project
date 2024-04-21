@@ -26,7 +26,7 @@ def main():
         df = pd.read_csv(mat_path, header=[0], index_col=[0])
         dfs[model_name] = df.copy(deep=True)
 
-    def print_statement_for_better_performing_model(pos_model_name: str, neg_model_name: str, trace_sum: float) -> str:
+    def print_statement_for_precision(pos_model_name: str, neg_model_name: str, trace_sum: float) -> str:
         if trace_sum > 0:
             return f"{pos_model_name} has {trace_sum:.2f}% better precision than {neg_model_name}"
         return f"{neg_model_name} has {abs(trace_sum):.2f}% better precision than {pos_model_name}"
@@ -37,7 +37,7 @@ def main():
             df=df,
             out_path=base_out_path / f"{model_name_combo[0]}--minus--{model_name_combo[1]}.png"
         )
-        print(print_statement_for_better_performing_model(
+        print(print_statement_for_precision(
             pos_model_name=model_name_combo[0],
             neg_model_name=model_name_combo[1],
             trace_sum=np.trace(np.array(df)),

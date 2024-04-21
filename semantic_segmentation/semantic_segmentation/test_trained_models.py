@@ -120,7 +120,7 @@ def main():
     images_to_plot: dict[str, torch.Tensor] = {}
     if save_visualization:
         img, label = datasets.val.dataset.__getitem__(0)
-        colored_label = ColorizeLabels.colorize_labels(label[None, :, :, :])
+        colored_label = ColorizeLabels.colorize_labels(label[None, :, :, :]).to(torch.uint8)
         images_to_plot = {
             "original": img.clone().squeeze().permute(1, 2, 0),
             "ground-truth": colored_label.clone().squeeze().permute(1, 2, 0)
@@ -143,15 +143,15 @@ def main():
             print(f"Evaluating {model_name} for visualization")
             img = img.to(device=device)
             out = model(img[None, :, :, :].clone()).detach().cpu()
-            out = ColorizeLabels.colorize_labels(torch.argmax(out, dim=1)[None, :, :, :])
+            out = ColorizeLabels.colorize_labels(torch.argmax(out, dim=1)[None, :, :, :]).to(torch.uint8)
             images_to_plot[model_name] = out.clone().squeeze().permute(1, 2, 0)
 
     if save_visualization:
         print("Plotting...")
-        fig, ax = plt.subplots(nrows=1, ncols=len(images_to_plot), figsize=(10, 10))
+        fig, ax = plt.subplots(nrows=1, ncols=len(images_to_plot), figsize=(10, 3))
         for idx, (key, val) in enumerate(images_to_plot.items()):
             ax[idx].imshow(val)
-            ax[idx].set_title(key)
+            ax[idx].set_title(key, fontsize=8)
 
         plt.setp(ax, xticks=[], yticks=[])
         plt.tight_layout()
