@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torchvision.transforms.functional as F
 from PIL import Image
+import pandas as pd
 from tqdm import tqdm
 
 from data_prep.cityscape_dataset import get_dataset, LoadedDatasets, RemappedLabels
@@ -14,7 +15,8 @@ from data_prep.unzip_cityscape_dataset import UnzippedDatasets, gtFine_trainvalt
 from semantic_segmentation.backbone import FcnResNet50BackBone
 from semantic_segmentation.segmentor import Segmentor
 from semantic_segmentation.train_segmentor import CheckpointPath
-from visualization.data import ColorizeLabels, generate_confusion_matrix_from_array
+from visualization.data import ColorizeLabels, generate_confusion_matrix_from_array, generate_confusion_matrix_from_df
+import itertools
 
 CRF_RNN_NON_FINETUNED_BACKBONE_CHKPT_PATH: Path = CheckpointPath / "CRF-RNN/CRF-RNN--29.pth"
 CRF_RNN_NON_FINETUNED_BACKBONE_OUT_PATH: Path = CheckpointPath.parent / "outputs/CRF-RNN"
@@ -79,6 +81,7 @@ def test_and_save_outputs(
 
 
 def main():
+    base_out_path = FCN_RESNET_OUT_PATH.parent
     datasets: LoadedDatasets = get_dataset(
         batch_size=1,
         resize_size=None,
@@ -126,6 +129,7 @@ def main():
             "ground-truth": colored_label.clone().squeeze().permute(1, 2, 0)
         }
 
+    dfs: dict[str, pd.DataFrame] = {}
     for model, kwargs, model_path, out_path, model_name in zip(models, kwargs_list, models_paths, out_paths, model_names):
         print(f"Instantiating {model_name}")
         model: nn.Module = model(**kwargs)
@@ -139,6 +143,10 @@ def main():
                 out_path=out_path,
                 save_images=save_images,
             )
+        if (out_path / "confusion-mat.csv").exists():
+            df = pd.read_csv(out_path / "confusion-mat.csv", header=[0], index_col=[0])
+            dfs[model_name] = df.copy(deep=True)
+
         if save_visualization:
             print(f"Evaluating {model_name} for visualization")
             img = img.to(device=device)
@@ -158,6 +166,24 @@ def main():
         fig.savefig(str(VISUALIZATION_OUT_PATH))
         plt.show()
         plt.close(fig)
+
+    if len(dfs) > 1:
+        def print_statement_for_precision(pos_model_name: str, neg_model_name: str, trace_sum: float) -> str:
+            if trace_sum > 0:
+                return f"{pos_model_name} has {trace_sum:.2f}% better precision than {neg_model_name}"
+            return f"{neg_model_name} has {abs(trace_sum):.2f}% better precision than {pos_model_name}"
+
+        for model_name_combo in itertools.combinations(list(dfs.keys()), r=2):
+            df = dfs[model_name_combo[0]] - dfs[model_name_combo[1]]
+            generate_confusion_matrix_from_df(
+                df=df,
+                out_path=base_out_path / f"{model_name_combo[0]}--minus--{model_name_combo[1]}.png"
+            )
+            print(print_statement_for_precision(
+                pos_model_name=model_name_combo[0],
+                neg_model_name=model_name_combo[1],
+                trace_sum=np.trace(np.array(df)),
+            ))
 
 
 if __name__ == '__main__':
