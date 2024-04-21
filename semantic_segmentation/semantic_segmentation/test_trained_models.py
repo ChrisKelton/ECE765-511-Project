@@ -112,7 +112,11 @@ def main():
         "CRF-RNN--FcnResNet-Not-Finetuned",
     ]
     save_images: bool = False
+    generate_confusion_matrix: bool = False
     save_visualization: bool = True
+    if not save_images and not generate_confusion_matrix and not save_visualization:
+        raise RuntimeError(f"No flags set. Nothing will happen...")
+
     images_to_plot: dict[str, torch.Tensor] = {}
     if save_visualization:
         img, label = datasets.val.dataset.__getitem__(0)
@@ -126,16 +130,19 @@ def main():
         print(f"Instantiating {model_name}")
         model: nn.Module = model(**kwargs)
         model.load_state_dict(torch.load(str(model_path)))
+        model.to(device=device)
         model.eval()
-        test_and_save_outputs(
-            model=model,
-            dataloader=datasets.val,
-            out_path=out_path,
-            save_images=save_images,
-        )
+        if save_images or generate_confusion_matrix:
+            test_and_save_outputs(
+                model=model,
+                dataloader=datasets.val,
+                out_path=out_path,
+                save_images=save_images,
+            )
         if save_visualization:
-            print(f"Evaluating {model_name} for visualization[")
-            out = model(img.clone())
+            print(f"Evaluating {model_name} for visualization")
+            img = img.to(device=device)
+            out = model(img[None, :, :, :].clone()).detach().cpu()
             out = ColorizeLabels.colorize_labels(torch.argmax(out, dim=1)[None, :, :, :])
             images_to_plot[model_name] = out.clone().squeeze().permute(1, 2, 0)
 
@@ -148,8 +155,8 @@ def main():
 
         plt.setp(ax, xticks=[], yticks=[])
         plt.tight_layout()
-        plt.show()
         fig.savefig(str(VISUALIZATION_OUT_PATH))
+        plt.show()
         plt.close(fig)
 
 
