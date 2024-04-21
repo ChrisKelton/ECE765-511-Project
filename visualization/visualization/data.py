@@ -1,11 +1,15 @@
-__all__ = ["imshow", "ColorizeLabels"]
+__all__ = ["imshow", "ColorizeLabels", "generate_confusion_matrix_from_array"]
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import torch
 import torchvision
-from dataclasses import dataclass
+
 from data_prep.cityscape_dataset import RemappedLabels
 
 
@@ -74,3 +78,53 @@ class ColorizeLabels:
                 colored_labels[batch, :, batch_labels[0], batch_labels[1]] = torch.Tensor(color).unsqueeze(1)
 
         return colored_labels
+
+
+def generate_confusion_matrix_from_array(
+    confusion_mat: np.ndarray,
+    class_names: list[str],
+    img_out_path: Path,
+    csv_out_path: Optional[Path] = None,
+    normalize: bool = True,
+    to_percentages: bool = True,
+):
+    if confusion_mat.shape[0] != confusion_mat.shape[1]:
+        raise RuntimeError(f"confusion_mat must be a square matrix, got shape: '{confusion_mat.shape}'")
+    if img_out_path.is_dir():
+        raise RuntimeError(f"img_out_path must point to a file, not a directory: '{img_out_path}'")
+    if csv_out_path is None:
+        csv_out_path = img_out_path.parent / f"{img_out_path.stem}.csv"
+
+    if normalize:
+        for row in range(confusion_mat.shape[0]):
+            sum_ = np.sum(confusion_mat[row, :])
+            confusion_mat[row, :] /= sum_
+
+    if to_percentages:
+        confusion_mat *= 100
+
+    df = pd.DataFrame(
+        confusion_mat,
+        index=class_names,
+        columns=class_names,
+    )
+    df.to_csv(str(csv_out_path))
+    generate_confusion_matrix_from_df(
+        df=df,
+        out_path=img_out_path,
+        to_percentages=to_percentages,
+    )
+
+
+def generate_confusion_matrix_from_df(
+    df: pd.DataFrame,
+    out_path: Path,
+    to_percentages: bool = True,
+):
+    plt.figure(figsize=(max((10, len(df) + 1)), max((7, len(df) - 3))))
+    ax = sns.heatmap(df, annot=True, fmt=".2f")
+    if to_percentages:
+        for t in ax.texts:
+            t.set_text(t.get_text() + "%")
+    plt.savefig(str(out_path))
+    plt.close()

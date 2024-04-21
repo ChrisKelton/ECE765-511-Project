@@ -1,4 +1,4 @@
-__all__ = ["train", "train_one_epoch"]
+__all__ = ["train", "train_one_epoch", "CheckpointPath"]
 import os
 from pathlib import Path
 from typing import Optional

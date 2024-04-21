@@ -3,6 +3,7 @@ import time
 
 import torch
 import torch.nn as nn
+import torchvision.transforms
 from torchvision.models.segmentation import fcn_resnet50, FCN_ResNet50_Weights
 from utils.torch_model import freeze_layers
 
@@ -27,6 +28,7 @@ class FcnResNet50BackBone(FcnResNet50Wrapper):
         n_classes: int = 20,
         weights: FCN_ResNet50_Weights = FCN_ResNet50_Weights.DEFAULT,
         n_layers_to_not_freeze: int = 0,
+        apply_normalization: bool = False,
     ):
         super().__init__(weights=weights, n_layers_to_not_freeze=n_layers_to_not_freeze)
 
@@ -36,8 +38,14 @@ class FcnResNet50BackBone(FcnResNet50Wrapper):
         in_channels = child.out_channels
         self.relu = nn.ReLU()
         self.proj_to_class_space = nn.Conv2d(in_channels, n_classes, kernel_size=(1, 1), stride=(1, 1))
+        self.normalize = torchvision.transforms.Compose([
+            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        self.apply_normalization = apply_normalization
 
     def forward(self, x) -> torch.Tensor:
+        if self.apply_normalization:
+            x = self.normalize(x)
         return self.proj_to_class_space(self.relu(super().forward(x)))
 
 

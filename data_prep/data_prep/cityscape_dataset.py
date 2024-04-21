@@ -18,7 +18,6 @@ import torchvision.transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import Cityscapes
 
-from data_analysis import DATA_STD, DATA_MEANS
 from data_prep.unzip_cityscape_dataset import UnzippedDatasets, DefaultUnzippedDatasets
 
 
@@ -183,6 +182,7 @@ def get_dataset(
     return_cityscape_objects: bool = False,
     center_crop_size: Optional[tuple[int, int]] = None,  # (648, 648)
     resize_size: Optional[tuple[int, int]] = (224, 224),
+    ignore_normalization: bool = False,
 ) -> LoadedDatasets:
     """
 
@@ -220,6 +220,7 @@ def get_dataset(
         center_crop_size: size to crop images to, (int, int). Necessary due to our very large images & not
             enough computing resources. Is NOT applied when 'return_cityscape_objects' is 'True'
         resize_size: size to resize images to (int, int). Necessary due to very large images.
+        ignore_normalization: flag to ignore normalization transform on images
 
     Returns:
 
@@ -273,7 +274,8 @@ def get_dataset(
         transform.append(torchvision.transforms.CenterCrop(size=center_crop_size))
     if resize_size is not None and not return_cityscape_objects:
         transform.append(torchvision.transforms.Resize(size=resize_size, antialias=True))
-    transform.append(torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
+    if not ignore_normalization:
+        transform.append(torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
     transform = torchvision.transforms.Compose(transform)
 
     # if center_crop_size is not None:

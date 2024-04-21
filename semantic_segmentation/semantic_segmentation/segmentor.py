@@ -18,10 +18,16 @@ class Segmentor(nn.Module):
         bilateral_filter_kernel_sizes: tuple[tuple[int, ...], ...] = CrfRnnConfig["bilateral_filter_kernel_sizes"],
         bilateral_filter_sigmas: tuple[tuple[tuple[int, float], ...], ...] = CrfRnnConfig["bilateral_filter_sigmas"],
         freeze_backbone_layers: bool = True,
+        apply_normalization: bool = False,
     ):
         super().__init__()
 
-        self.backbone = FcnResNet50BackBone(n_layers_to_not_freeze=0 if freeze_backbone_layers else -1)
+        self.backbone = FcnResNet50BackBone(
+            n_layers_to_not_freeze=0 if freeze_backbone_layers else -1,
+            apply_normalization=apply_normalization,
+        )
+        if not freeze_backbone_layers:
+            self.backbone.requires_grad_(True)
         self.crf_net = CrfRnn(
             n_classes=n_classes,
             n_crf_blocks=n_crf_blocks,

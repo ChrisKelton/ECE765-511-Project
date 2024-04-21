@@ -33,7 +33,8 @@ def main(
     print(f"Using {n_workers} workers.")
     segmentor = Segmentor(n_classes=20, freeze_backbone_layers=freeze_backbone_layers)
     if pretrained_backbone_path is not None:
-        segmentor.backbone.load_state_dict(str(pretrained_backbone_path))
+        segmentor.backbone.load_state_dict(torch.load(str(pretrained_backbone_path)))
+    segmentor.to(device)
     segmentor.print_n_params()
     datasets: LoadedDatasets = get_dataset(
         gt_root=data_path,
@@ -64,4 +65,7 @@ def main(
 
 
 if __name__ == '__main__':
-    main()
+    main(
+        model_name="Test",
+        freeze_backbone_layers=False,
+    )
