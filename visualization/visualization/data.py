@@ -1,7 +1,7 @@
-__all__ = ["imshow", "ColorizeLabels", "generate_confusion_matrix_from_array"]
+__all__ = ["imshow", "ColorizeLabels", "generate_confusion_matrix_from_array", "plot_histogram"]
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -123,8 +123,75 @@ def generate_confusion_matrix_from_df(
 ):
     plt.figure(figsize=(max((10, len(df) + 1)), max((7, len(df) - 3))))
     ax = sns.heatmap(df, annot=True, fmt=".2f")
+    plt.xticks(np.arange(0.5, len(df.columns) + 0.5), list(df.columns), rotation=70, fontsize="xx-large")
+    plt.yticks(np.arange(0.5, len(df.columns) + 0.5), list(df.columns), fontsize="xx-large")
     if to_percentages:
         for t in ax.texts:
             t.set_text(t.get_text() + "%")
     plt.savefig(str(out_path))
     plt.close()
+
+
+def plot_histogram(
+    y_vals: list[np.ndarray],
+    out_path: Path,
+    labels: Optional[list[str]] = None,
+    yticks: Optional[list[Any]] = None,
+    xticks: Optional[list[Any]] = None,
+    xticks_rotation: Optional[float] = None,
+    title: Optional[str] = None,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    ylim: Optional[tuple[float, float]] = None,
+):
+    old_len: int = len(y_vals[0])
+    for y_val in y_vals:
+        if len(y_val) != old_len:
+            raise RuntimeError(f"Inconsistent length in y_vals: {len(y_val)} != {old_len}")
+        old_len = len(y_val)
+
+    if yticks is not None and ylim is not None:
+        print(f"Warning: yticks & ylim are both set. Setting ylim = 'None' and respecting yticks.")
+        ylim = None
+
+    if ylim is not None:
+        if not isinstance(ylim, (list, tuple)):
+            raise RuntimeError(f"ylim is not a list nor a tuple. Got '{type(ylim)}'")
+
+    if labels is None:
+        labels = [None] * len(y_vals)
+
+    fig = plt.figure(figsize=(10, 5))
+    ax = plt.axes()
+    ax.set_facecolor("wheat")
+
+    x = np.arange(0, len(y_vals[0]))
+
+    if yticks is not None:
+        plt.yticks(yticks, fontsize="x-large")
+        for ytick in yticks:
+            plt.hlines(ytick, min(x), max(x), colors="white")
+
+    width = max((0.1, (1 / len(y_vals)) - 0.1))
+    width_offsets = list(np.linspace(-width, width, num=len(y_vals)))
+    for idx, (height, label, width_offset) in enumerate(zip(y_vals, labels, width_offsets)):
+        plt.bar(x + width_offset, height, width=width, label=label)
+
+    if xticks is not None:
+        plt.xticks(x, xticks, rotation=xticks_rotation, fontsize="x-large")
+    if title is not None:
+        plt.title(title)
+    if xlabel is not None:
+        plt.xlabel(xlabel, fontsize="xx-large")
+    if ylabel is not None:
+        plt.ylabel(ylabel, fontsize="xx-large")
+    if ylim is not None:
+        plt.ylim(ylim)
+    if labels is not None:
+        legend = plt.legend(loc="upper right", edgecolor="black")
+        legend.get_frame().set_alpha(None)
+        legend.get_frame().set_facecolor((0, 0, 1, 0.1))
+
+    plt.tight_layout()
+    plt.savefig(str(out_path))
+    plt.close(fig)

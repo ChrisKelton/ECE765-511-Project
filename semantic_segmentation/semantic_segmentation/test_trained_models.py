@@ -1,13 +1,14 @@
+import itertools
 import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as F
 from PIL import Image
-import pandas as pd
 from tqdm import tqdm
 
 from data_prep.cityscape_dataset import get_dataset, LoadedDatasets, RemappedLabels
@@ -15,8 +16,8 @@ from data_prep.unzip_cityscape_dataset import UnzippedDatasets, gtFine_trainvalt
 from semantic_segmentation.backbone import FcnResNet50BackBone
 from semantic_segmentation.segmentor import Segmentor
 from semantic_segmentation.train_segmentor import CheckpointPath
-from visualization.data import ColorizeLabels, generate_confusion_matrix_from_array, generate_confusion_matrix_from_df
-import itertools
+from visualization.data import ColorizeLabels, generate_confusion_matrix_from_array, generate_confusion_matrix_from_df, \
+    plot_histogram
 
 CRF_RNN_NON_FINETUNED_BACKBONE_CHKPT_PATH: Path = CheckpointPath / "CRF-RNN/CRF-RNN--29.pth"
 CRF_RNN_NON_FINETUNED_BACKBONE_OUT_PATH: Path = CheckpointPath.parent / "outputs/CRF-RNN"
@@ -116,8 +117,10 @@ def main():
     ]
     save_images: bool = False
     generate_confusion_matrix: bool = False
-    save_visualization: bool = True
-    if not save_images and not generate_confusion_matrix and not save_visualization:
+    read_in_confusion_matrix: bool = True
+    read_in_confusion_matrix |= generate_confusion_matrix
+    save_visualization: bool = False
+    if not save_images and not generate_confusion_matrix and not save_visualization and not read_in_confusion_matrix:
         raise RuntimeError(f"No flags set. Nothing will happen...")
 
     images_to_plot: dict[str, torch.Tensor] = {}
@@ -130,42 +133,51 @@ def main():
         }
 
     dfs: dict[str, pd.DataFrame] = {}
-    for model, kwargs, model_path, out_path, model_name in zip(models, kwargs_list, models_paths, out_paths, model_names):
-        print(f"Instantiating {model_name}")
-        model: nn.Module = model(**kwargs)
-        model.load_state_dict(torch.load(str(model_path)))
-        model.to(device=device)
-        model.eval()
-        if save_images or generate_confusion_matrix:
-            test_and_save_outputs(
-                model=model,
-                dataloader=datasets.val,
-                out_path=out_path,
-                save_images=save_images,
-            )
-        if (out_path / "confusion-mat.csv").exists():
-            df = pd.read_csv(out_path / "confusion-mat.csv", header=[0], index_col=[0])
-            dfs[model_name] = df.copy(deep=True)
+    if save_visualization or generate_confusion_matrix or save_images:
+        for model, kwargs, model_path, out_path, model_name in zip(models, kwargs_list, models_paths, out_paths, model_names):
+            print(f"Instantiating {model_name}")
+            model: nn.Module = model(**kwargs)
+            model.load_state_dict(torch.load(str(model_path)))
+            model.to(device=device)
+            model.eval()
+            if save_images or generate_confusion_matrix:
+                test_and_save_outputs(
+                    model=model,
+                    dataloader=datasets.val,
+                    out_path=out_path,
+                    save_images=save_images,
+                )
+            if (out_path / "confusion-mat.csv").exists():
+                df = pd.read_csv(out_path / "confusion-mat.csv", header=[0], index_col=[0])
+                dfs[model_name] = df.copy(deep=True)
+
+            if save_visualization:
+                print(f"Evaluating {model_name} for visualization")
+                img = img.to(device=device)
+                out = model(img[None, :, :, :].clone()).detach().cpu()
+                out = ColorizeLabels.colorize_labels(torch.argmax(out, dim=1)[None, :, :, :]).to(torch.uint8)
+                images_to_plot[model_name] = out.clone().squeeze().permute(1, 2, 0)
 
         if save_visualization:
-            print(f"Evaluating {model_name} for visualization")
-            img = img.to(device=device)
-            out = model(img[None, :, :, :].clone()).detach().cpu()
-            out = ColorizeLabels.colorize_labels(torch.argmax(out, dim=1)[None, :, :, :]).to(torch.uint8)
-            images_to_plot[model_name] = out.clone().squeeze().permute(1, 2, 0)
+            print("Plotting...")
+            fig, ax = plt.subplots(nrows=1, ncols=len(images_to_plot), figsize=(10, 3))
+            for idx, (key, val) in enumerate(images_to_plot.items()):
+                ax[idx].imshow(val)
+                ax[idx].set_title(key, fontsize=8)
 
-    if save_visualization:
-        print("Plotting...")
-        fig, ax = plt.subplots(nrows=1, ncols=len(images_to_plot), figsize=(10, 3))
-        for idx, (key, val) in enumerate(images_to_plot.items()):
-            ax[idx].imshow(val)
-            ax[idx].set_title(key, fontsize=8)
+            plt.setp(ax, xticks=[], yticks=[])
+            plt.tight_layout()
+            fig.savefig(str(VISUALIZATION_OUT_PATH))
+            plt.show()
+            plt.close(fig)
 
-        plt.setp(ax, xticks=[], yticks=[])
-        plt.tight_layout()
-        fig.savefig(str(VISUALIZATION_OUT_PATH))
-        plt.show()
-        plt.close(fig)
+    if read_in_confusion_matrix and len(dfs) == 0:
+        for out_path, model_name in zip(out_paths, model_names):
+            csv_path = out_path / "confusion-mat.csv"
+            if not csv_path.exists():
+                raise RuntimeError(f"No csv found at '{csv_path}'")
+            df = pd.read_csv(csv_path, header=[0], index_col=[0])
+            dfs[model_name] = df.copy(deep=True)
 
     if len(dfs) > 1:
         def print_statement_for_precision(pos_model_name: str, neg_model_name: str, trace_sum: float) -> str:
@@ -184,6 +196,22 @@ def main():
                 neg_model_name=model_name_combo[1],
                 trace_sum=np.trace(np.array(df)),
             ))
+
+        precision_vals: list[np.ndarray] = []
+        for df in dfs.values():
+            precision_vals.append(np.asarray(df).diagonal() / 100)
+        xticks = list(df.columns)
+        out_path = base_out_path / "accuracy-plot.png"
+        plot_histogram(
+            precision_vals,
+            out_path,
+            labels=list(dfs.keys()),
+            yticks=[0.00, 0.25, 0.50, 0.75, 1.00],
+            xticks=xticks,
+            xticks_rotation=70,
+            xlabel="Class",
+            ylabel="Accuracy",
+        )
 
 
 if __name__ == '__main__':

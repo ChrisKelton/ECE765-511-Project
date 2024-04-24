@@ -49,8 +49,10 @@ Training HyperParameters:
 
 Results:
 
-| Model                                                                | Training Accuracy | Validation Accuracy | Training Loss | Validation Loss | Epochs |
-|:---------------------------------------------------------------------|:-----------------:|:-------------------:|:-------------:|:---------------:|:------:|
-| FcnResNet (frozen backbone layers)                                   |      87.54%       |       86.33%        |     0.394     |      0.442      |   30   |
-| CRF-RNN w/ FcnResNet Backbone (frozen backbone layers)               |      87.63%       |       86.54%        |     0.387     |      0.432      |   30   |
-| CRF-RNN w/ FineTuned FcnResNet Backbone (frozen backbone layers)     |      89.12%       |       87.01%        |     0.336     |      0.422      |   30   |
+| Model                                                            | Training Accuracy | Validation Accuracy | Training Loss | Validation Loss | Epochs |
+|:-----------------------------------------------------------------|:-----------------:|:-------------------:|:-------------:|:---------------:|:------:|
+| FcnResNet (frozen backbone layers)                               |      87.54%       |       86.33%        |     0.394     |      0.442      |   30   |
+| CRF-RNN w/ FcnResNet Backbone (frozen backbone layers)           |      87.63%       |       86.54%        |     0.387     |      0.432      |   30   |
+| CRF-RNN w/ FineTuned FcnResNet Backbone (frozen backbone layers) |      89.12%       |       87.01%        |     0.336     |      0.422      |   30   |
+| UNet                                                             |      86.15%       |       85.78%        |     0.461     |      0.551      |   30   |
+| UNet + CRF-RNN                                                   |      85.28%       |       84.78%        |     0.477     |      0.568      |   30   |
