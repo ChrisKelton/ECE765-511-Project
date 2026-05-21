@@ -3,3 +3,9 @@ data/
 # ignore all files in third-party
 third-party/
 semantic_segmentation/train/checkpoints/
+semantic_segmentation/semantic_segmentation/train/
+#
+__pycache__/
+*egg*
+.idea/
+*Zone.Identifier*
